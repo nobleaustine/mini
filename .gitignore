@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# user added
+data/
+.vscode/
+iAMPCN/__pycache__/
+
 # Distribution / packaging
 .Python
 build/
