@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from iAMPCN.architecture import SequenceMultiTypeMultiCNN_1, FocalLoss
 from iAMPCN.data_feature import Dataset
-import os
+import os                                              
 from Bio import SeqIO
 
 def train(path="", batch_size=64, learning_rate=0.001, num_epochs=10, save_model_dir="models/AMP_1st"):
@@ -64,4 +64,4 @@ def train(path="", batch_size=64, learning_rate=0.001, num_epochs=10, save_model
                    os.path.join(save_model_dir, f'textcnn_cdhit_40_{epoch}.pth.tar'))
 
 if __name__ == "__main__":
-    train(path="/cluster/home/austinen/mini/data/AMP_1stage/AMPs_train_cdhit_40.fasta")
+    train(path="./data/AMP_1stage/AMPs_train_cdhit_40.fasta")

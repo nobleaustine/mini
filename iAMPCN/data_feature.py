@@ -376,8 +376,7 @@ if __name__ == '__main__':
 
     import torch
     import torch.nn as nn
-    device = torch.device("cpu")
-
+    device = torch.device("cuda")
     dataset = Dataset(
         fasta='static/uploads/Insect.fasta',
         sep=',')
