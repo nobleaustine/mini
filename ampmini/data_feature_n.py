@@ -171,31 +171,24 @@ def BLOSUM62_embedding(seq,max_len=200):
 
 
 def onehot_embedding(seq,max_len=200):
-    char_list='ARNDCQEGHILKMFPSTWYVX'
-    char_dict={}
-    for i in range(len(char_list)):
-        char_dict[char_list[i]]=i
-    all_embeddings=[]
-    for each_seq in seq:
-        temp_embeddings=[]
-        for each_char in each_seq:
-            codings=np.zeros(21)
-            if each_char in char_dict.keys():
-                codings[char_dict[each_char]]=1
-            else:
-                codings[20]=1
-            temp_embeddings.append(codings)
-        if max_len>len(each_seq):
-            zero_padding=np.zeros((max_len-len(each_seq),21))
-            data_pad=np.vstack((temp_embeddings,zero_padding))
-        elif max_len==len(each_seq):
-            data_pad=temp_embeddings
-        else:
-            data_pad=temp_embeddings[:max_len]
-              
-        all_embeddings.append(data_pad)
-    all_embeddings=np.array(all_embeddings)
-    return torch.from_numpy(all_embeddings).float()
+    char_list = 'ARNDCQEGHILKMFPSTWYVX'
+    char_dict = {char: idx for idx, char in enumerate(char_list)}
+    seq_indices = [[char_dict.get(char, 20) for char in each_seq] for each_seq in seq]
+
+    seq_tensor = [torch.tensor(indices) for indices in seq_indices]
+    stacked_seq_tensor = torch.stack(seq_tensor, dim=0)
+    
+    if stacked_seq_tensor.size(1) > max_len:
+        stacked_seq_tensor = stacked_seq_tensor[:, :max_len]    
+
+    one_hot_encoded = torch.nn.functional.one_hot(stacked_seq_tensor, num_classes=21)
+
+    if one_hot_encoded.size(1) < max_len:
+        padding = torch.zeros((one_hot_encoded.size(0), max_len - one_hot_encoded.size(1),one_hot_encoded.size(2)), dtype=torch.long)
+        one_hot_encoded = torch.cat((one_hot_encoded, padding), dim=1)
+    
+    return one_hot_encoded.float()
+
         
 
 def index_encoding(sequences,max_len=200):

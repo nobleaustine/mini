@@ -9,7 +9,10 @@ __pycache__/
 # user added
 data/
 .vscode/
-iAMPCN/__pycache__/
+ampmini/data/
+ampmini/models/
+ampmini/tmp_save/
+
 
 # Distribution / packaging
 .Python
