@@ -1009,3 +1009,4 @@ if __name__ == "__main__":
     y = model(AAI_feat,onehot_feat,blosum62_feat,PAAC_feat)  
     # y = model(AAI_feat)
     # y=model(x,ids,masks)
+    

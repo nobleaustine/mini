@@ -8,6 +8,7 @@ from sklearn.model_selection import KFold, ShuffleSplit
 import re
 import vocab
 from sklearn.model_selection import train_test_split
+from time import time
 
 
 def AAI_embedding(seq,max_len=200):
@@ -361,8 +362,6 @@ class Dataset(object):
 
         return data_loader
         # return data
-
-
 
     
 if __name__ == '__main__':
