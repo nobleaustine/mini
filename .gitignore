@@ -12,6 +12,11 @@ data/
 ampmini/data/
 ampmini/models/
 ampmini/tmp_save/
+ampmini/logs/
+ampmini/n_models/
+VT/
+others/
+iampcn.yml
 
 
 # Distribution / packaging

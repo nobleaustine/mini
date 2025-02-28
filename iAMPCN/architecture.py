@@ -1,8 +1,3 @@
-"""
-Created on Sun Nov  7 09:04:13 2021
-
-@author: joy
-"""
 
 import math
 from math import sqrt

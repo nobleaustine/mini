@@ -10,6 +10,71 @@ import vocab
 from sklearn.model_selection import train_test_split
 from time import time
 
+def BLOSUM62_embedding(seq,max_len=200):
+
+    f=open("data/blosum62.txt") #"iAMPCN/data/blosum62.txt"
+    text=f.read()
+    f.close()
+    text=text.split('\n')
+    while '' in text:
+        text.remove('')
+    cha=text[0].split(' ')
+    while '' in cha:
+        cha.remove('')
+    index=[]
+    for i in range(1,len(text)):
+        temp=text[i].split(' ')
+        while '' in temp:
+            temp.remove('')
+        for j in range(len(temp)):
+            temp[j]=float(temp[j])
+        index.append(temp)
+    index=np.array(index)
+    BLOSUM62_dict={}
+    for j in range(len(cha)):
+        BLOSUM62_dict[cha[j]]=index[:,j]
+    all_embeddings=[]
+    for each_seq in seq:
+        temp_embeddings=[]
+        for each_char in each_seq:
+            temp_embeddings.append(BLOSUM62_dict[each_char])
+        if max_len>len(each_seq):
+            zero_padding=np.zeros((max_len-len(each_seq),23))
+            data_pad=np.vstack((temp_embeddings,zero_padding))
+        elif max_len==len(each_seq):
+            data_pad=temp_embeddings
+        else:
+            data_pad=temp_embeddings[:max_len]
+        all_embeddings.append(data_pad)
+    all_embeddings=np.array(all_embeddings)
+    return torch.from_numpy(all_embeddings).float()
+
+def onehot_embedding(seq,max_len=200):
+    char_list='ARNDCQEGHILKMFPSTWYVX'
+    char_dict={}
+    for i in range(len(char_list)):
+        char_dict[char_list[i]]=i
+    all_embeddings=[]
+    for each_seq in seq:
+        temp_embeddings=[]
+        for each_char in each_seq:
+            codings=np.zeros(21)
+            if each_char in char_dict.keys():
+                codings[char_dict[each_char]]=1
+            else:
+                codings[20]=1
+            temp_embeddings.append(codings)
+        if max_len>len(each_seq):
+            zero_padding=np.zeros((max_len-len(each_seq),21))
+            data_pad=np.vstack((temp_embeddings,zero_padding))
+        elif max_len==len(each_seq):
+            data_pad=temp_embeddings
+        else:
+            data_pad=temp_embeddings[:max_len]
+              
+        all_embeddings.append(data_pad)
+    all_embeddings=np.array(all_embeddings)
+    return torch.from_numpy(all_embeddings).float()
 
 def AAI_embedding(seq,max_len=200):
     
@@ -53,7 +118,6 @@ def AAI_embedding(seq,max_len=200):
     all_embeddings=np.array(all_embeddings)
     return torch.from_numpy(all_embeddings).float()
 
-
 def PAAC_embedding(seq,max_len=200):
     f=open('data/PAAC.txt')
     text=f.read()
@@ -95,7 +159,6 @@ def PAAC_embedding(seq,max_len=200):
     all_embeddings=np.array(all_embeddings)
     return torch.from_numpy(all_embeddings).float()
 
-
 def PC6_embedding(seq,max_len=200):
     f=open('data/6-pc')
     text=f.read()
@@ -129,68 +192,6 @@ def PC6_embedding(seq,max_len=200):
     all_embeddings=np.array(all_embeddings)
     return torch.from_numpy(all_embeddings).float()
 
-
-def BLOSUM62_embedding(seq,max_len=200):
-
-    f=open("data/blosum62.txt") #"iAMPCN/data/blosum62.txt"
-    text=f.read()
-    f.close()
-    text=text.split('\n')
-    while '' in text:
-        text.remove('')
-    cha=text[0].split(' ')
-    while '' in cha:
-        cha.remove('')
-    index=[]
-    for i in range(1,len(text)):
-        temp=text[i].split(' ')
-        while '' in temp:
-            temp.remove('')
-        for j in range(len(temp)):
-            temp[j]=float(temp[j])
-        index.append(temp)
-    index=np.array(index)
-    BLOSUM62_dict={}
-    for j in range(len(cha)):
-        BLOSUM62_dict[cha[j]]=index[:,j]
-    all_embeddings=[]
-    for each_seq in seq:
-        temp_embeddings=[]
-        for each_char in each_seq:
-            temp_embeddings.append(BLOSUM62_dict[each_char])
-        if max_len>len(each_seq):
-            zero_padding=np.zeros((max_len-len(each_seq),23))
-            data_pad=np.vstack((temp_embeddings,zero_padding))
-        elif max_len==len(each_seq):
-            data_pad=temp_embeddings
-        else:
-            data_pad=temp_embeddings[:max_len]
-        all_embeddings.append(data_pad)
-    all_embeddings=np.array(all_embeddings)
-    return torch.from_numpy(all_embeddings).float()
-
-
-def onehot_embedding(seq,max_len=200):
-    char_list = 'ARNDCQEGHILKMFPSTWYVX'
-    char_dict = {char: idx for idx, char in enumerate(char_list)}
-    seq_indices = [[char_dict.get(char, 20) for char in each_seq] for each_seq in seq]
-
-    seq_tensor = [torch.tensor(indices) for indices in seq_indices]
-    stacked_seq_tensor = torch.stack(seq_tensor, dim=0)
-    
-    if stacked_seq_tensor.size(1) > max_len:
-        stacked_seq_tensor = stacked_seq_tensor[:, :max_len]    
-
-    one_hot_encoded = torch.nn.functional.one_hot(stacked_seq_tensor, num_classes=21)
-
-    if one_hot_encoded.size(1) < max_len:
-        padding = torch.zeros((one_hot_encoded.size(0), max_len - one_hot_encoded.size(1),one_hot_encoded.size(2)), dtype=torch.long)
-        one_hot_encoded = torch.cat((one_hot_encoded, padding), dim=1)
-    
-    return one_hot_encoded.float()
-
-        
-
 def index_encoding(sequences,max_len=200):
     '''
     Modified from https://github.com/openvax/mhcflurry/blob/master/mhcflurry/amino_acid.py#L110-L130
@@ -216,7 +217,6 @@ def index_encoding(sequences,max_len=200):
     encoding = encoding.values.astype(int)
     return encoding
 
-
 class MetagenesisData(torch.utils.data.Dataset):
     def __init__(self, data):
         self.data = data
@@ -226,7 +226,6 @@ class MetagenesisData(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         return self.data[index]
-
 
 class Dataset(object):
 
@@ -305,17 +304,24 @@ class Dataset(object):
     #     return feat
 
     def build_data(self, max_length):
-        
-        sequences = self.native_sequence
-        seq_enc_onehot = self.encode_seq_enc_onehot(sequences,max_length=max_length)
-        # train_seq_enc_bertencoding,train_seq_mask = self.encode_seq_enc_bertT5(train_sequences, max_length=max_length)
-        # valid_seq_enc_bertencoding,valid_seq_mask = self.encode_seq_enc_bertT5(valid_sequences, max_length=max_length)
-        # test_seq_enc_bertencoding,test_seq_mask = self.encode_seq_enc_bertT5(test_sequences, max_length=max_length)
-        seq_enc_blosum62 = self.encode_seq_enc_BLOSUM62(sequences,max_length=max_length)
-        seq_enc_AAI = self.encode_seq_enc_AAI(sequences,max_length=max_length)
-        seq_enc_PAAC = self.encode_seq_enc_PAAC(sequences,max_length=max_length)
-        seq_enc_PC6 = self.encode_seq_enc_PC6(sequences,max_length=max_length)
-        seq_enc = self.encode_seq_enc(sequences,max_length=max_length)    
+        with torch.no_grad():
+            sequences = self.native_sequence
+            print("embedding started")
+            seq_enc_onehot = self.encode_seq_enc_onehot(sequences,max_length=max_length)
+            print("onehot done")
+            # train_seq_enc_bertencoding,train_seq_mask = self.encode_seq_enc_bertT5(train_sequences, max_length=max_length)
+            # valid_seq_enc_bertencoding,valid_seq_mask = self.encode_seq_enc_bertT5(valid_sequences, max_length=max_length)
+            # test_seq_enc_bertencoding,test_seq_mask = self.encode_seq_enc_bertT5(test_sequences, max_length=max_length)
+            seq_enc_blosum62 = self.encode_seq_enc_BLOSUM62(sequences,max_length=max_length)
+            print("blosum done")
+            seq_enc_AAI = self.encode_seq_enc_AAI(sequences,max_length=max_length)
+            print("AAI done")   
+            seq_enc_PAAC = self.encode_seq_enc_PAAC(sequences,max_length=max_length)
+            print("PAAC done")
+            seq_enc_PC6 = self.encode_seq_enc_PC6(sequences,max_length=max_length)
+            print("PC6 done")
+            seq_enc = self.encode_seq_enc(sequences,max_length=max_length)    
+            print("index done")
 
 
 
@@ -336,7 +342,7 @@ class Dataset(object):
                 'seq_enc_BLOSUM62': seq_enc_blosum62[i],
                 'seq_enc_PAAC': seq_enc_PAAC[i],
                 'seq_enc_AAI': seq_enc_AAI[i],
-                'label': self.label[i]
+                # 'label': self.label[i]
             }
             if self.use_phy_feat:
                 sample['phy_feat'] = self.phy_feat[i]
@@ -349,14 +355,13 @@ class Dataset(object):
 
     def get_dataloader(self,  max_length=200,batch_size=128,
                        resample_train_valid=False):
-        
-        data = self.build_data(max_length)
-        data_loader = torch.utils.data.DataLoader(data, batch_size=batch_size)
+        with torch.no_grad():
+            data = self.build_data(max_length)
+            data_loader = torch.utils.data.DataLoader(data, batch_size=batch_size)
 
         return data_loader
         # return data
 
-    
 if __name__ == '__main__':
 
     import torch

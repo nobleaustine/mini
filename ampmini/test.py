@@ -1,24 +1,14 @@
 from Bio import SeqIO
 import sys
-sys.path.append('/cluster/home/austinen/mini/ampmini')
-
-path1="./data/AMP_1stage/AMPs_train_cdhit_40.fasta"
-# path1 = "./models/data/AMP_1stage/AMPs_train_cdhit_40.fasta"
-fas_id=[]
-fas_seq=[]
-labels=[]
-
-for seq_record in SeqIO.parse(path1, "fasta"):
-    fas_seq.append(str(seq_record.seq).upper())
-    fas_id.append(str(seq_record.id))
-    labels.append(1)
-    break
-print(len(fas_seq))
-
-from data_feature_n import onehot_embedding
-
 import torch
 import numpy as np
+import time 
+sys.path.append('/cluster/home/austinen/mini/ampmini')
+from data_embed import onehot_embedding, BLOSUM62_embedding
+from data_embed import AAI_embedding, PAAC_embedding
+
+def compare_embeddings(old_emb, new_emb):
+        return torch.allclose(old_emb, new_emb, atol=1e-6)
 
 def onehot_embedding_n(seq, max_len=200):
 
@@ -47,6 +37,81 @@ def onehot_embedding_n(seq, max_len=200):
     
     return one_hot_encoded.float()
 
-a = onehot_embedding_n(fas_seq)
-b = onehot_embedding(fas_seq)
-print(torch.all(a==b))
+def BLOSUM62_embedding_n(seq, filepath="data/blosum62.txt", max_len=200):
+    with open(filepath, "r") as f:
+        text = [line.strip() for line in f if line.strip()]
+    
+    cha = text[0].split()
+    index = np.array([list(map(float, line.split())) for line in text[1:]])
+    
+    BLOSUM62_dict = {char: torch.tensor(index[:, j], dtype=torch.float32) for j, char in enumerate(cha)}
+    
+    batch_size = len(seq)
+    emb_dim = len(next(iter(BLOSUM62_dict.values())))
+    embeddings = torch.zeros((batch_size, max_len, emb_dim), dtype=torch.float32)
+    
+    for i, each_seq in enumerate(seq):
+        seq_len = min(len(each_seq), max_len)
+        embeddings[i, :seq_len] = torch.stack([BLOSUM62_dict[char] for char in each_seq[:seq_len]])
+    
+    return embeddings
+
+def AAI_embedding_n(seq, filepath="data/AAindex.txt", max_len=200):
+    with open(filepath, "r") as f:
+        text = [line.strip() for line in f if line.strip()]
+    
+    cha = text[0].split('\t')[1:]
+    index = np.array([list(map(float, line.split('\t')[1:])) for line in text[1:]])
+    
+    AAI_dict = {char: torch.tensor(index[:, j], dtype=torch.float32) for j, char in enumerate(cha)}
+    AAI_dict['X'] = torch.zeros(index.shape[0], dtype=torch.float32)
+    
+    batch_size = len(seq)
+    emb_dim = index.shape[0]
+    embeddings = torch.zeros((batch_size, max_len, emb_dim), dtype=torch.float32)
+    
+    for i, each_seq in enumerate(seq):
+        seq_len = min(len(each_seq), max_len)
+        embeddings[i, :seq_len] = torch.stack([AAI_dict.get(char, AAI_dict['X']) for char in each_seq[:seq_len]])
+    
+    return embeddings
+
+
+if __name__ == "__main__":
+    path1="./data/AMP_1stage/AMPs_train_cdhit_40.fasta"
+    # path1 = "./models/data/AMP_1stage/AMPs_train_cdhit_40.fasta"
+    fas_id=[]
+    fas_seq=[]
+    labels=[]
+
+    for seq_record in SeqIO.parse(path1, "fasta"):
+        fas_seq.append(str(seq_record.seq).upper())
+        fas_id.append(str(seq_record.id))
+        labels.append(1)
+        break
+
+    # a = onehot_embedding_n(fas_seq)
+    # b = onehot_embedding(fas_seq)
+    # print(torch.all(a==b))
+
+    # old_embeddings = BLOSUM62_embedding(fas_seq)
+    # new_embeddings = BLOSUM62_embedding_n(fas_seq)
+
+    start_time = time.time()
+    # embeddings1 = AAI_embedding_n(fas_seq)
+    # embeddings1 = BLOSUM62_embedding_n(fas_seq)
+    embeddings1 = onehot_embedding_n(fas_seq)
+    ttime = time.time() - start_time
+
+    print(f"Embedding1 Time: {ttime:.6f} sec | Shape: {embeddings1.shape}")
+
+    start_time = time.time()
+    # embeddings1 = AAI_embedding(fas_seq)
+    # embeddings2 = BLOSUM62_embedding(fas_seq)
+    embeddings2 = onehot_embedding(fas_seq)
+    ttime = time.time() - start_time
+
+    print(f"Embedding2 Time: {ttime:.6f} sec | Shape: {embeddings2.shape}")
+
+    if compare_embeddings(embeddings1, embeddings2):
+        print("Embeddings are equal")
