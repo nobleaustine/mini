@@ -10,9 +10,10 @@ import vocab
 from sklearn.model_selection import train_test_split
 from time import time
 
+
 def BLOSUM62_embedding(seq,max_len=200):
 
-    f=open("data/blosum62.txt") #"iAMPCN/data/blosum62.txt"
+    f=open("./data/blosum62.txt") #"iAMPCN/data/blosum62.txt"
     text=f.read()
     f.close()
     text=text.split('\n')
@@ -78,7 +79,7 @@ def onehot_embedding(seq,max_len=200):
 
 def AAI_embedding(seq,max_len=200):
     
-    f=open('data/AAindex.txt')
+    f=open('./data/AAindex.txt')
     text=f.read()
     f.close()
     text=text.split('\n')
@@ -119,7 +120,7 @@ def AAI_embedding(seq,max_len=200):
     return torch.from_numpy(all_embeddings).float()
 
 def PAAC_embedding(seq,max_len=200):
-    f=open('data/PAAC.txt')
+    f=open('./data/PAAC.txt')
     text=f.read()
     f.close()
     text=text.split('\n')
@@ -160,7 +161,7 @@ def PAAC_embedding(seq,max_len=200):
     return torch.from_numpy(all_embeddings).float()
 
 def PC6_embedding(seq,max_len=200):
-    f=open('data/6-pc')
+    f=open('./data/6-pc')
     text=f.read()
     f.close()
     text=text.split('\n')
