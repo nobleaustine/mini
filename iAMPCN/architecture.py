@@ -143,7 +143,7 @@ class GlobalPredictor(nn.Module):
             ('sigmoid', nn.Sigmoid())
         ]))
 
-    def forward(self, x):
+    def forward(self, x):k0
         x = self.predict_layer(x)
         return x
 
