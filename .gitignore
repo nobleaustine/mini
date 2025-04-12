@@ -6,7 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
-# user added
+# user defined
 data/
 .vscode/
 ampmini/data/
@@ -17,6 +17,8 @@ ampmini/n_models/
 VT/
 others/
 iampcn.yml
+esmfold_v1_local/
+logs/
 
 
 # Distribution / packaging

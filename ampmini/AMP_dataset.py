@@ -1,5 +1,7 @@
 
 import torch
+import os
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 import pandas as pd
@@ -7,23 +9,30 @@ import numpy as np
 
 class AMP_Dataset(Dataset):
     
-    def __init__(self, csv_path="./data/AMP_sequences.csv"):
+    def __init__(self, csv_path="./data/new_AMP_sequences.csv",embed_path = "./data/esmfold_train_features/"):
         """
         Args:
             csv_path (str): Path to the CSV file containing peptide sequences and functional labels.
         """
-        self.data = pd.read_csv(csv_path, sep=",")
+        data = pd.read_csv(csv_path, sep=",")
+        self.embed_path = embed_path
+        self.ids = data["id"].values
+        self.data = {id: (seq,label) for id, seq,label in zip(
+            data["id"].values,
+            data["sequence"].values,
+            data.iloc[:, 2:].values.astype(float))}
         # print(self.data.columns)
-        self.sequences = self.data["sequence"].values
         # Extract sequence and labels as key and value pairs
-        self.labels = {seq: label for seq, label in zip(
-            self.data["sequence"].values, 
-            self.data.iloc[:, 2:].values.astype(float))}  
+        # self.labels = {seq: label for seq, label in zip(
+        #     data["sequence"].values, 
+        #     data.iloc[:, 2:].values.astype(float))} # all column after 2 are labels
+        
+     
 
     def __len__(self):
         return len(self.data)
 
-    def BLOSUM62_embedding(self,seq,max_len=200):
+    def BLOSUM62_embedding(self,seq,max_len=100):
 
         f=open("data/blosum62.txt") 
         text=f.read()
@@ -62,7 +71,7 @@ class AMP_Dataset(Dataset):
         all_embeddings=np.array(all_embeddings)
         return torch.from_numpy(all_embeddings).float()
 
-    def onehot_embedding(self,seq,max_len=200):
+    def onehot_embedding(self,seq,max_len=100):
 
         char_list='ARNDCQEGHILKMFPSTWYVX'
         char_dict={}
@@ -91,7 +100,7 @@ class AMP_Dataset(Dataset):
         # print(torch.from_numpy(all_embeddings).float().shape)
         return torch.from_numpy(all_embeddings).float()
 
-    def AAI_embedding(self,seq,max_len=200):
+    def AAI_embedding(self,seq,max_len=100):
         
         f=open('data/AAindex.txt')
         text=f.read()
@@ -133,7 +142,7 @@ class AMP_Dataset(Dataset):
         all_embeddings=np.array(all_embeddings)
         return torch.from_numpy(all_embeddings).float()
 
-    def PAAC_embedding(self,seq,max_len=200):
+    def PAAC_embedding(self,seq,max_len=100):
 
         f=open('data/PAAC.txt')
         text=f.read()
@@ -177,7 +186,10 @@ class AMP_Dataset(Dataset):
 
     def __getitem__(self, idx):
 
-        sequence = str(self.sequences[idx])
+        id = self.ids[idx]
+        sequence,label = self.data[id]
+        esm_np = np.load(os.path.join(self.embed_path, f"{id}.npz"))
+        esmdata = {key: torch.from_numpy(esm_np[key]) for key in esm_np.files}
 
         return {
             "sequence": sequence,
@@ -185,7 +197,10 @@ class AMP_Dataset(Dataset):
             "blosum62": self.BLOSUM62_embedding([sequence]),
             "aai": self.AAI_embedding([sequence]),
             "paac": self.PAAC_embedding([sequence]),
-            "label": torch.tensor(self.labels[sequence], dtype=torch.float32)
+            # "esm_s_s": esmdata["s_s"],
+            # "esm_s_z": esmdata["s_z"],
+            "esm_states": esmdata["states"],
+            "label": torch.tensor(label, dtype=torch.float32)
         }
 
 if __name__ == "__main__":
@@ -198,6 +213,9 @@ if __name__ == "__main__":
         print(batch["blosum62"].shape)
         print(batch["onehot"].shape)
         print(batch["label"].shape)
+        # print(batch["esm_s_s"].shape)
+        # print(batch["esm_s_z"].shape)
+        print(batch["esm_states"].shape)
         break
 
 

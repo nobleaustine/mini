@@ -119,6 +119,101 @@ class mMHSA(nn.Module):
         
         return v1, v2, attn
 
+
+class SequenceMultiTypeMultiCNN_2(nn.Module):
+    """Container module with an encoder, a recurrent module, and a decoder."""
+
+    def __init__(self, d_input=[531,21,23,3],
+                vocab_size=None, seq_len=None,
+                dropout=0.1,d_another_h=64,k_cnn=[2,3,4,5,6],d_output=1):
+        super(SequenceMultiTypeMultiCNN_2, self).__init__()
+        
+        self.batchnorm_4=nn.BatchNorm1d(num_features=d_input[3])
+        self.convs_1 = nn.ModuleList([
+                nn.Sequential(nn.Conv1d(in_channels=d_input[0], 
+                                        out_channels=d_another_h, 
+                                        kernel_size=h),
+                              nn.BatchNorm1d(num_features=d_another_h), 
+                              nn.ReLU(),
+                              nn.MaxPool1d(kernel_size=seq_len-h+1))
+                     for h in k_cnn
+                    ])
+        self.convs_2 = nn.ModuleList([
+                nn.Sequential(nn.Conv1d(in_channels=d_input[1], 
+                                        out_channels=d_another_h, 
+                                        kernel_size=h),
+                              nn.BatchNorm1d(num_features=d_another_h), 
+                              nn.ReLU(),
+                              nn.MaxPool1d(kernel_size=seq_len-h+1))
+                     for h in k_cnn
+                    ])
+        self.convs_3 = nn.ModuleList([
+                nn.Sequential(nn.Conv1d(in_channels=d_input[2], 
+                                        out_channels=d_another_h, 
+                                        kernel_size=h),
+                              nn.BatchNorm1d(num_features=d_another_h), 
+                              nn.ReLU(),
+                              nn.MaxPool1d(kernel_size=seq_len-h+1))
+                     for h in k_cnn
+                    ])
+        self.convs_4 = nn.ModuleList([
+                nn.Sequential(nn.Conv1d(in_channels=d_input[3], 
+                                        out_channels=d_another_h, 
+                                        kernel_size=h),
+                              nn.BatchNorm1d(num_features=d_another_h), 
+                              nn.ReLU(),
+                              nn.MaxPool1d(kernel_size=seq_len-h+1))
+                     for h in k_cnn
+                    ])
+        self.maxpool_1=nn.MaxPool1d(kernel_size=len(k_cnn))
+        self.maxpool_2=nn.MaxPool1d(kernel_size=len(k_cnn))
+        self.maxpool_3=nn.MaxPool1d(kernel_size=len(k_cnn))
+        self.maxpool_4=nn.MaxPool1d(kernel_size=len(k_cnn))
+        # self.maxpool_1=nn.AvgPool1d(kernel_size=5)
+        # self.maxpool_2=nn.AvgPool1d(kernel_size=5)
+        # self.maxpool_3=nn.AvgPool1d(kernel_size=5)
+        # self.maxpool_4=nn.AvgPool1d(kernel_size=5)
+        self.drop = nn.Dropout(dropout)
+        
+        self.fc_1 = nn.Linear(d_another_h*len(k_cnn), d_output)
+        self.fc_2 = nn.Linear(d_another_h*len(k_cnn), d_output)
+        self.fc_3 = nn.Linear(d_another_h*len(k_cnn), d_output)
+        self.fc_4 = nn.Linear(d_another_h*len(k_cnn), d_output)
+        self.fc = nn.Linear(4*d_another_h, d_output)
+        self.sigmoid=nn.Sigmoid()
+
+
+
+    def forward(self, AAI_feat,onehot_feat,BLOSUM62_feat,PAAC_feat):
+        # print(x)
+        AAI_feat = AAI_feat.permute(0,2,1)
+        out_1 = [conv(AAI_feat) for conv in self.convs_1] 
+        onehot_feat = onehot_feat.permute(0,2,1)
+        out_2 = [conv(onehot_feat) for conv in self.convs_2] 
+        BLOSUM62_feat = BLOSUM62_feat.permute(0,2,1)
+        out_3 = [conv(BLOSUM62_feat) for conv in self.convs_3] 
+        
+        PAAC_feat = PAAC_feat.permute(0,2,1)
+        PAAC_feat = self.batchnorm_4(PAAC_feat)
+        out_4 = [conv(PAAC_feat) for conv in self.convs_4] 
+        out_1 = torch.cat(out_1, dim=2)
+        # print(out_1.size())
+        out_1=self.maxpool_1(out_1)
+        # print(out_1.size())
+        out_2 = torch.cat(out_2, dim=2)
+        out_2=self.maxpool_2(out_2)
+        out_3 = torch.cat(out_3, dim=2)
+        out_3=self.maxpool_3(out_3)
+        out_4 = torch.cat(out_4, dim=2)
+        out_4=self.maxpool_4(out_4)
+        # print(out_4.size())
+        x=torch.cat([out_1,out_2,out_3,out_4],dim=1)
+        x = x.view(-1, x.size(1)) 
+        # out=torch.cat([out_1,out_2,out_3,out_4], dim=1)
+        x = self.fc(x)
+        x = self.sigmoid(x)
+        return x,out_1,out_2,out_3,out_4
+
 class MultiLabelClassifier(nn.Module):
     def __init__(self, input_dim, num_classes=24, hidden_dim=256, dropout=0.3):
         super(MultiLabelClassifier, self).__init__()

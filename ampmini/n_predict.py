@@ -1,221 +1,109 @@
-
 import sys
 sys.path.append("./")
-import os
-from Bio import SeqIO
-import os
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-# from tqdm import tqdm
+import logging
+import os
+import sys
 import numpy as np
-import scipy.stats
-import pathlib
-import copy
-import time
-# from termcolor import colored
-import vocab 
-from architecture import SequenceMultiTypeMultiCNN_1
-from tools import EarlyStopping
-from data_embed import Dataset
-from sklearn.metrics import roc_auc_score
-# from sklearn.metrics import accuracy_score,f1_score,confusion_matrix,matthews_corrcoef
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import pandas as pd
-import argparse
-
-all_function_names=['antibacterial','antigram-positive','antigram-negative','antifungal','antiviral',
-                   'anti_mammalian_cells','antihiv','antibiofilm','anticancer','antimrsa','antiparasitic',
-                   'hemolytic','chemotactic','antitb','anurandefense','cytotoxic',
-                    'endotoxin','insecticidal','antimalarial','anticandida','antiplasmodial','antiprotozoal']
-
-def return_y(data_iter, net):
-
-    y_pred=[]
-    all_seq=[]
-
-    for batch in data_iter:
-
-        all_seq+=batch['sequence']
-        AAI_feat = batch['seq_enc_AAI'].to(device)
-        onehot_feat = batch['seq_enc_onehot'].to(device)
-        BLOSUM62_feat = batch['seq_enc_BLOSUM62'].to(device)
-        PAAC_feat = batch['seq_enc_PAAC'].to(device)
-        
-        outputs=net(AAI_feat,onehot_feat,BLOSUM62_feat,PAAC_feat)
-
-        y_pred.extend(outputs.cpu().numpy())
+from sklearn.metrics import f1_score, matthews_corrcoef, roc_auc_score
+from torch.utils.data import DataLoader
+from network import SequenceTransformer,TranCNNnew
+from AMP_dataset import AMP_Dataset
+from collections import OrderedDict
 
 
-    return y_pred,all_seq
+# Setup logging
+log_dir = "logs/SequenceTransformer/AMP_s2"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, "test_log.txt")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
-def testing(batch_size, testfasta, seq_len, model_file, device):
-    model = SequenceMultiTypeMultiCNN_1(d_input=[531, 21, 23, 3], vocab_size=21, seq_len=seq_len,
-                                        dropout=0.1, d_another_h=128, k_cnn=[2, 3, 4, 5, 6], d_output=1).to(device)
+def evaluate(model_path, test_data_path, batch_size=64, num_classes=14):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f"Evaluating on {device}")
     
-    dataset = Dataset(fasta=testfasta)
-    test_loader = dataset.get_dataloader(batch_size=batch_size, max_length=seq_len)
-    
-    model.load_state_dict(torch.load(model_file, map_location=torch.device('cpu'))['state_dict'])
+    # Load model
+    model = TranCNNnew().to(device)
+    checkpoint = torch.load(model_path, map_location=device)
+    state_dict = checkpoint['state_dict'] 
+    # model.load_state_dict(checkpoint['state_dict'])
+    # If model was trained with DataParallel, keys will start with 'module.'
+    if any(k.startswith('module.') for k in state_dict.keys()):
+        # Remove 'module.' prefix
+        new_state_dict = OrderedDict((k.replace('module.', ''), v) for k, v in state_dict.items())
+
+    else:
+        new_state_dict = state_dict
+
+    model.load_state_dict(new_state_dict)
     model.eval()
+    logging.info(f"Loaded model from {model_path}")
+    
+    # Load test dataset
+    test_dataset = AMP_Dataset(csv_path=test_data_path,embed_path = "./data/esmfold_test_features/")
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    logging.info("Test dataset loaded...")
+    
+    all_labels = []
+    all_preds = []
+    all_probs = []
     
     with torch.no_grad():
-        y_pred, all_seq = return_y(test_loader, model)
+        for batch in test_loader:
+            AAI_embed = batch["aai"].squeeze(1).to(device)
+            PAAC_embed = batch["paac"].squeeze(1).to(device)
+            BLOSUM62_embed = batch["blosum62"].squeeze(1).to(device)
+            OH_embed = batch["onehot"].squeeze(1).to(device)
+            labels = batch["label"].squeeze(1).to(device)
+            esm_feat = batch["esm_states"].squeeze(1).to(device)
+            
+            # x = [AAI_embed, PAAC_embed, BLOSUM62_embed, OH_embed]
+            # outputs = model(x)
+            outputs = model(AAI_embed, OH_embed, BLOSUM62_embed, PAAC_embed,esm_feat)
+            probs = torch.sigmoid(outputs).cpu().numpy()
+            # probs = probs.cpu().numpy()
+            preds = (probs > 0.6).astype(int)
+            
+            all_labels.append(labels.cpu().numpy())
+            all_preds.append(preds)
+            all_probs.append(probs)
+            print("labels", all_labels[-1][0])
+            print("preds", all_preds[-1][0])
+            print("probs", all_probs[-1][0])
     
-    y_pred = np.array(y_pred).T[0].tolist()
-    return y_pred, all_seq
-
-def predict(test_file):
+    all_labels = np.vstack(all_labels)
+    all_preds = np.vstack(all_preds)
+    all_probs = np.vstack(all_probs)
     
+    # Calculate metrics for each class
+    f1_scores = []
+    mcc_scores = []
+    auc_scores = []
     
-    fas_id=[]
-    fas_seq=[]
-    labels=[]
-    for seq_record in SeqIO.parse(os.path.join(test_file,"dummy_test_AMP.fasta"), "fasta"):
-        fas_seq.append(str(seq_record.seq).upper())
-        fas_id.append(str(seq_record.id))
-        labels.append(1)
-    for seq_record in SeqIO.parse(os.path.join(test_file,"dummy_test_NONAMP.fasta"), "fasta"):
-        fas_seq.append(str(seq_record.seq).upper())
-        fas_id.append(str(seq_record.id))
-        labels.append(0)
-
-       
-    seq_len=200
-    batch_size=64
-    # cdhit_value=40
-    # vocab_size = len(vocab.AMINO_ACIDS)
-
-    model_file="./models_n/SequenceMultiTypeMultiCNN_1/AMP_1st/textcnn_cdhit_40_90.pth.tar"
-    # epochs=300
-    temp_save_AMP_filename='%s'%(time.strftime('%Y-%m-%d-%H-%M-%S',time.localtime()))
-    pred_prob, _ = testing(batch_size=batch_size, testfasta=fas_seq, seq_len=seq_len, model_file=model_file, device=device)
-    pred_labels = [1 if prob > 0.5 else 0 for prob in pred_prob]
-
-    # pred_prob=[]
-    # for cv_number in range(10):
-    #     df=pd.read_csv(f'tmp_save/{temp_save_AMP_filename}_{cv_number}.csv')
-    #     data=df.values.tolist()
-    #     temp=[]
-    #     for i in range(len(data)):
-    #         temp.append(data[i][1])
-    #     pred_prob.append(temp)
-
-    # pred_prob=np.average(pred_prob,0)
-    # pred_AMP_label=[]
-    # for i in range(len(pred_prob)):
-    #     if pred_prob[i]>0.5:
-    #         pred_AMP_label.append(1)
-    #     else:
-    #         pred_AMP_label.append(0)
-
-
-    # Ground truth labels
-    y_true = labels
-
-    # Predicted labels (binary after thresholding)
-    y_pred = pred_labels
-
-    # Compute metrics
-    accuracy = accuracy_score(y_true, y_pred)
-    precision = precision_score(y_true, y_pred)
-    recall = recall_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
-
-    # Print results
-    print(f"Accuracy: {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall: {recall:.4f}")
-    print(f"F1 Score: {f1:.4f}")
-
-    
-
-    # for function_name in all_function_names:
-    #     temp_dir_list=os.listdir('tmp_save')
-    #     if function_name not in temp_dir_list:
-    #         os.mkdir('tmp_save/'+function_name)
-    #     for cv_number in range(10):
-    #         testing(testfasta=fas_seq,
-    #                 model_file=f'models/AMP_2nd/{function_name}/textcnn_cdhit_100_{cv_number}.pth.tar',
-    #                 save_file=f'tmp_save/{function_name}/{temp_save_AMP_filename}_{cv_number}.csv',
-    #                 batch_size=batch_size, patience=10, n_epochs=epochs,seq_len=seq_len,cdhit_value=cdhit_value,cv_number=cv_number)
-    
-    
-    # all_function_pred_label=[]
-    # for function_name in all_function_names:
+    for i in range(num_classes):
+        f1 = f1_score(all_labels[:, i], all_preds[:, i])
+        mcc = matthews_corrcoef(all_labels[:, i], all_preds[:, i])
+        try:
+            auc = roc_auc_score(all_labels[:, i], all_preds[:, i])
+        except ValueError:
+            auc = float('nan')  # Handle cases where AUC cannot be computed
         
-    #     function_threshold_df=pd.read_csv(f'models/AMP_2nd_threashold/{function_name}_yd_threshold.csv',index_col=0)
-    #     function_thresholds=function_threshold_df.values[:,0]       
-        
-    #     each_function_data=[]
-        
-    #     for cv_number in range(10):
-    #         df=pd.read_csv(f'tmp_save/{function_name}/{temp_save_AMP_filename}_{cv_number}.csv')
-    #         data=df.values.tolist()
-    #         temp=[]
-    #         for i in range(len(data)):
-
-    #             if data[i][1]>function_thresholds[cv_number]:
-    #                 temp.append(1)
-    #             else:
-    #                 temp.append(0)
-    #         each_function_data.append(temp)
-    #     each_function_data=np.average(each_function_data,0)
-    #     pred_each_function_label=[]
-    #     for i in range(len(each_function_data)):
-    #         if each_function_data[i]>0.5:
-    #             pred_each_function_label.append('Yes')
-    #         else:
-    #             pred_each_function_label.append('No')
-                
-    #     all_function_pred_label.append(pred_each_function_label)
-        
-    # all_function_cols=['antibacterial','anti-Gram-positive','anti-Gram-negative','antifungal','antiviral',\
-    #                    'anti-mammalian-cells','anti-HIV','antibiofilm','anticancer','anti-MRSA','antiparasitic',\
-    #                    'hemolytic','chemotactic','anti-TB','anurandefense','cytotoxic',\
-    #                     'endotoxin','insecticidal','antimalarial','anticandida','antiplasmodial','antiprotozoal']
-
+        f1_scores.append(f1)
+        mcc_scores.append(mcc)
+        auc_scores.append(auc)
+        logging.info(f"Class {i}: F1 = {f1:.4f}, MCC = {mcc:.4f}, AUC = {auc:.4f}")
     
-    # pred_contents_dict={'name':fas_id,'sequence':fas_seq,'AMP':pred_AMP_label}
-    # for i in range(len(all_function_cols)):
-    #     pred_contents_dict[all_function_cols[i]]=all_function_pred_label[i]
+    logging.info(f"Average F1-score: {np.mean(f1_scores):.4f}")
+    logging.info(f"Average MCC: {np.mean(mcc_scores):.4f}")
+    logging.info(f"Average AUC: {np.nanmean(auc_scores):.4f}")
     
-    
-    # pred_contents_df=pd.DataFrame(pred_contents_dict)
-    
-    # for function_name in all_function_names:
-    #     for cv_number in range(10):
-    #         os.remove(f'tmp_save/{function_name}/{temp_save_AMP_filename}_{cv_number}.csv')
-    # for cv_number in range(10):
-    #     os.remove(f'tmp_save/{temp_save_AMP_filename}_{cv_number}.csv')        
-    
-    # return pred_contents_df
-    # master.insert_one({'Test Report': res_val})
- 
-if __name__ == '__main__':
-
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
-    parser = argparse.ArgumentParser(description='proposed model')
-    parser.add_argument('-test_fasta_file', default='./data/AMP_1stage/', type=str)   
-    args = parser.parse_args()
-
-    test_file=args.test_fasta_file
-    flag=0
-    for seq_record in SeqIO.parse(os.path.join(test_file,"dummy_test_AMP.fasta"), "fasta"):
-        temp_id=str(seq_record.id)
-        temp_seq=str(seq_record.seq)
-        if len(set(temp_seq.upper()).difference(set('ACDEFGHIKLMNPQRSTVWY')))>0:
-            flag=1
-            print('input error: have unusual amino acids')
-            break
-    for seq_record in SeqIO.parse(os.path.join(test_file,"dummy_test_NONAMP.fasta"), "fasta"):
-        temp_id=str(seq_record.id)
-        temp_seq=str(seq_record.seq)
-        if len(set(temp_seq.upper()).difference(set('ACDEFGHIKLMNPQRSTVWY')))>0:
-            flag=1
-            print('input error: have unusual amino acids')
-            break
-    if flag==0:
-        pred_df=predict(test_file)
+if __name__ == "__main__":
+    evaluate(model_path="./n_models/out/newTCNN80.pth.tar", test_data_path="./data/new_AMP_sequences_test.csv")

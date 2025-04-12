@@ -143,7 +143,7 @@ class GlobalPredictor(nn.Module):
             ('sigmoid', nn.Sigmoid())
         ]))
 
-    def forward(self, x):k0
+    def forward(self, x):
         x = self.predict_layer(x)
         return x
 
@@ -155,6 +155,7 @@ class GlobalPredictor(nn.Module):
 #                 dropout=0.1, lstm_dropout=0,
 #                 nlayers=1, bidirectional=False,
 #                 proj_loc_config=None):
+
 class SequenceLSTM(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
 
@@ -962,30 +963,20 @@ class LSTMPredictor(nn.Module):
         return output
 
 if __name__ == "__main__":
-    # model = LSTMPredictor(
-    #     d_model=128, d_h=128, nlayers=1,
-    #     vocab_size=21, seq_len=500,bidirectional=True,
-    #     d_another_input=531,d_another_embed=128)
     
-    model = SequenceMultiCNN_1(d_input=578,
-                vocab_size=21, seq_len=500,
-                dropout=0.1,d_another_h=64,d_output=1)
-
-    # model = SequenceMultiCNNLSTM(d_input=531, d_model=128,
-    #             vocab_size=21, seq_len=500,
-    #             dropout=0.1, d_another_h=64,k_cnn=[2,3,4,5,6],d_output=1)
-    model = SequenceMultiTypeMultiCNN_1(d_input=[531,21,23,3], 
-                vocab_size=21, seq_len=500,
+    model = SequenceMultiTypeMultiCNN_2(d_input=[531,21,23,3], 
+                vocab_size=21, seq_len=200,
                 dropout=0.1, d_another_h=64,k_cnn=[2,3,4,5,6],d_output=1)
     x = torch.randint(0, 21, (128, 300))
     ids = torch.randint(0, 21, (128, 300))
     masks=torch.ones(128, 300)
     # glob_feat = torch.rand((128, 500, 768))
-    AAI_feat = torch.rand((128, 500, 531))
-    onehot_feat = torch.rand((128, 500, 21))
-    blosum62_feat = torch.rand((128, 500, 23))
-    PAAC_feat = torch.rand((128, 500, 3))
-    # y = model(x, glob_feat=glob_feat, loc_feat=loc_feat)    
+    AAI_feat = torch.rand((128, 200, 531))
+    onehot_feat = torch.rand((128, 200, 21))
+    blosum62_feat = torch.rand((128, 200, 23))
+    PAAC_feat = torch.rand((128, 200, 3))
+    # y = model(x, glob_feat=glob_feat, loc_feat=loc_feat) 
+    out = model(AAI_feat,onehot_feat,blosum62_feat,PAAC_feat)   
     # print(y.size())
 
     
