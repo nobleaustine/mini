@@ -10,9 +10,11 @@ __pycache__/
 data/
 .vscode/
 ampmini/data/
+ampmini/logs/
+ampmini/models/
 iAMPCN/models/
 ampmini/tmp_save/
-ampmini/logs/
+
 ampmini/n_models/
 VT/
 others/
